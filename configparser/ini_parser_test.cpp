@@ -1,6 +1,6 @@
 #include <cstdio>
-#include <cstring>
 #include "ini_parser.h"
+#include "./../tools.h"
 
 using namespace std;
 
@@ -19,16 +19,16 @@ int main()
     iniparser.output();
 
     // 测试
-    printf("// string 获取测试\n");
+    outputSuccess("// string 获取测试\n");
     printf("%d\n", iniparser.get_v_string("copier", "PowerPointPath", res1));
     printf("%s\n\n", res1.c_str());
-    printf("// bool 获取测试\n");
+    outputSuccess("// bool 获取测试\n");
     printf("%d\n", iniparser.get_v_bool("copier", "LogMode", res2));
     printf("%d\n\n", res2);
-    printf("// int 获取测试\n");
-    printf("%d\n", iniparser.get_v_int("copier", "fuck", res3));
+    outputSuccess("// int 获取测试\n");
+    printf("%d\n", iniparser.get_v_int("net_work", "MaxSendSize", res3));
     printf("%d\n\n", res3);
-    printf("// double 获取测试\n");
+    outputSuccess("// double 获取测试\n");
     printf("%d\n", iniparser.get_v_double("copier", "shit", res4));
     printf("%f\n\n", res4);
     return 0;
