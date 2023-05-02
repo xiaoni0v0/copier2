@@ -1,3 +1,6 @@
+#ifndef H_TOOLS
+#define H_TOOLS
+
 template<class T>
 class rff // return for function
 {
@@ -46,4 +49,10 @@ bool isInUDisk(const std::string &, const std::string &);
 
 rff<std::string> getFilePathSplitByAbs(const std::string &, int);
 
-int run_cmd(const std::string &, std::string &);
+rff<std::string> run_cmd(const std::string &);
+
+int getMD5FromFile(const std::string &, char[16]);
+
+int getFileSize(const std::string &);
+
+#endif

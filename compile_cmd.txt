@@ -1,0 +1,2 @@
+windres -i "Icon.rc" -o "Icon.o"
+g++ copier.cpp tools.cpp configparser/ini_parser.cpp network/network_socket.cpp Icon.o -o copier -O2 -static -mwindows -lws2_32

@@ -6,6 +6,7 @@
 #include <cstdarg>  //可变参数
 #include "tools.h"
 #include "configparser/ini_parser.h"
+#include "network/network_socket.h"
 
 using namespace std;
 #define DEBUG_MODE true
@@ -164,15 +165,24 @@ int main(int argc, char *argv[])
         PowerPointPath = "%s"
         CopyPath = "%s"
         IgnoreDisk = "%s"
-        CopyFlush = %d
+        CopyFlush = %d%s
     [net_work]
         ServerAddr = "%s"
         SendPPT = %d
         SecretKey = "%s"
-        MaxSendSize = %d
+        MaxSendSize = %d%s
 )",
-        C_LogMode, C_PowerPointPath.c_str(), C_CopyPath.c_str(), C_IgnoreDisk.c_str(), C_CopyFlush,
-        C_ServerAddr.c_str(), C_SendPPT, C_SecretKey.c_str(), C_MaxSendSize);
+        C_LogMode, C_PowerPointPath.c_str(), C_CopyPath.c_str(), C_IgnoreDisk.c_str(),
+        C_CopyFlush, C_CopyFlush > 0 ? "" : " (不是合法数值)",
+        C_ServerAddr.c_str(), C_SendPPT, C_SecretKey.c_str(),
+        C_MaxSendSize, C_MaxSendSize >= -1 ? "" : " (不是合法数值)");
+
+    // 不合法的配置信息
+    if (C_CopyFlush <= 0 || C_MaxSendSize < -1)
+    {
+        log("有配置不合法，程序终止\n");
+        return -1;
+    }
 
     // 干正事
     if (argc == 2)

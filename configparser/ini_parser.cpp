@@ -38,7 +38,7 @@ IniParser::IniParser()
 int IniParser::read(const string &f_path)
 {
     FILE *_in;
-    if (nullptr == (_in = fopen(f_path.c_str(), "r")))
+    if (!(_in = fopen(f_path.c_str(), "r")))
     {
         outputError("[ini_parser][ERROR] 文件 \"%s\" 打开失败！\n", f_path.c_str());
         return -1;
