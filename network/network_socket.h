@@ -31,6 +31,7 @@ public:
 class Socket_copier_part
 {
 public:
+    int sta = -1;
     std::string addr, sk;
     Socket_TCP base;
 

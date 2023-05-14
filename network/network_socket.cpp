@@ -20,13 +20,13 @@ int Socket_TCP::create()
     // 先注册
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
     {
-        outputError("套接字注册失败！");
+        outputError("套接字注册失败！\n");
         return -1;
     }
     // 创建套接字
     if (INVALID_SOCKET == (sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP)))
     {
-        outputError("套接字创建失败！");
+        outputError("套接字创建失败！\n");
         return -2;
     }
     isSetup = true;
@@ -133,9 +133,13 @@ Socket_copier_part::Socket_copier_part(const string &_addr, const string &_sk)  
     sk = (_sk + string(8, '0')).substr(0, 8);  // 防止不够 8 位导致访问非法内存
     // 创建
     base.create();
-    if (base.s_connect(_addr, PORT) != 0)
+    if ((sta = base.s_connect(_addr, PORT)))
     {
-        outputError("连接失败！");
+        outputError("连接失败！\n");
+    }
+    else
+    {
+        outputSuccess("连接成功！\n");
     }
 }
 
@@ -148,20 +152,13 @@ int Socket_copier_part::send_version() const
     return status(base.s_send(&VER, 1));
 }
 
-/** @返回值
+/** @param what 干什么？0 为检测网络环境，1 为传输文件
+ *  @返回值
  *      0 为成功，-1 为失败
  */
 int Socket_copier_part::send_what(const char what) const
 {
-    if (what == 0 || what == 1)
-    {
-        return status(base.s_send(&what, 1));
-    }
-    else
-    {
-        outputError("未知 what: %d\n", what);
-        return -1;
-    }
+    return status(base.s_send(&what, 1));
 }
 
 /** @返回值
@@ -177,14 +174,14 @@ int Socket_copier_part::send_sk() const
  */
 int Socket_copier_part::send_hash(const string &fp) const
 {
-    char buffer[16] = {0};
-    if (getMD5FromFile(fp, buffer) == 0)
+    char buffer[16];
+    if (getMD5FromFile(fp, buffer) == -1)
     {
-        return status(base.s_send(buffer, 16));
+        return -2;
     }
     else
     {
-        return -2;
+        return status(base.s_send(buffer, 16));
     }
 }
 
@@ -261,7 +258,7 @@ int Socket_copier_part::recv_net_status() const
 {
     char buf = -1;
     base.s_recv(&buf, 1);
-    return buf == -1 || buf == 0 || buf == 1 ? buf : -1;
+    return buf == 0 || buf == 1 ? buf : -1;
 }
 
 /** 网络连接状态

@@ -29,17 +29,12 @@ public:
 #define outputWarning(...) outputWCol(0xe, __VA_ARGS__)
 #define outputError(...) outputWCol(FOREGROUND_RED, __VA_ARGS__)
 #define outputSuccess(...) outputWCol(FOREGROUND_GREEN, __VA_ARGS__)
-#define outputInfo(...) outputWCol(FOREGROUND_BLUE, __VA_ARGS__)
 
 void outputWCol(unsigned short, const char *, ...);
 
 void print_sep(char, bool = true, int = 60);
 
-void print_sep(const char *, bool = true, int = 60);
-
 tm *get_tm();
-
-bool fileExists(const std::string &);
 
 int copyFile(const std::string &, const std::string &, int);
 
@@ -54,5 +49,9 @@ rff<std::string> run_cmd(const std::string &);
 int getMD5FromFile(const std::string &, char[16]);
 
 int getFileSize(const std::string &);
+
+char *GBKCharToUTF8Char(const char *);
+
+std::string GBKStringToUTF8String(const std::string &);
 
 #endif

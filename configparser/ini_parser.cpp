@@ -97,7 +97,7 @@ int IniParser::read(const string &f_path)
 /* section 的个数 */
 int IniParser::n_sections()
 {
-    return sections.size();
+    return (int) sections.size();
 }
 
 /* 输出这个解析器对象中的字典所有键值对 */

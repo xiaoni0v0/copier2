@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <io.h>
 #include <windows.h>
 #include <string>
 #include <sys/stat.h> //stat
@@ -8,7 +9,7 @@
 using namespace std;
 
 regex
-        re_comma("((\\s*,\\s*)|(\\s*，\\s*))"),
+        re_comma(R"(((\s*,\s*)|(\s*，\s*)|(\s*.\s*)|(\s*。\s*)|(\s*、\s*)))"),
         re_fpath_abs(R"((([A-Za-z]):(?:.+)?[/\\])([^/\\:\*\?\"<>\|]+))");
 
 /* 输出
@@ -56,31 +57,12 @@ void print_sep(char c, bool nl, int times)
     }
 }
 
-void print_sep(const char *s, bool nl, int times)
-{
-    for (int i = 0; i < times; i++)
-    {
-        printf("%s", s);
-    }
-    if (nl)
-    {
-        printf("\n");
-    }
-}
-
 /* 获取当前时间 */
 tm *get_tm()
 {
     time_t now;
     time(&now);
     return localtime(&now);
-}
-
-/* 判断文件是否存在 */
-bool fileExists(const string &fp)
-{
-    struct stat statBuf{};
-    return (stat(fp.c_str(), &statBuf) == 0); // == 0 代表读取文件状态成功 -> 文件存在
 }
 
 /* 二进制拷贝文件 */
@@ -112,13 +94,15 @@ int copyFile(const string &fileA, const string &fileB, int cf)  // cf: copy flus
     return 0;
 }
 
-// 在这里P用没有！获取的是工作目录而不是 exe 文件目录
-/* 当前工作目录 */
-// string getWorkDir() {
-//     char buffer[MAX_PATH * 2];
-//     getcwd(buffer, MAX_PATH * 2);
-//     return buffer;
-// }
+/* 在这里P用没有！获取的是工作目录而不是 exe 文件目录
+// 当前工作目录
+string getWorkDir()
+{
+    char buffer[MAX_PATH * 2];
+    getcwd(buffer, MAX_PATH * 2);
+    return buffer;
+}
+*/
 
 /* 当前exe目录 */
 string getExeFileAbsPath()
@@ -185,10 +169,12 @@ rff<string> run_cmd(const string &cmd)
     return {0, res};
 }
 
+/**
+ * @返回值 状态。0 为成功，-1 为执行 cmd 失败，-2 为文件不存在
+ */
 int getMD5FromFile(const string &fp, char buf[16])
 {
-    string cmd = "chcp 65001 & certutil -hashfile \"" + fp + "\" MD5";
-    printf("cmd: %s\n", cmd.c_str());
+    string cmd = "certutil -hashfile \"" + fp + "\" MD5";
     rff<string> r = run_cmd(cmd);
     if (r.status() != 0)
     {
@@ -204,7 +190,7 @@ int getMD5FromFile(const string &fp, char buf[16])
         s.erase(indexOfSpace, 1);
     }
     // 找 hash
-    const regex RE_MD5("[0-9a-fA-F]{32}");
+    const regex RE_MD5("[0-9A-F]{32}", regex_constants::icase);
     const sregex_token_iterator end;
     for (sregex_token_iterator iter(s.begin(), s.end(), RE_MD5); iter != end; iter++)
     {
@@ -226,12 +212,46 @@ int getMD5FromFile(const string &fp, char buf[16])
     return 0;
 }
 
+/** 获取文件大小
+ * @return 文件大小，单位：byte。若为 -1 则文件不存在
+ */
 int getFileSize(const std::string &fp)
 {
     // 这是一个存储文件(夹)信息的结构体，其中有文件大小和创建时间、访问时间、修改时间等
     struct stat statBuf{};
     // 提供文件名字符串，获得文件属性结构体
-    stat(fp.c_str(), &statBuf);
-    // 获取文件大小
-    return statBuf.st_size;
+    if (stat(fp.c_str(), &statBuf) == 0)
+    {
+        // 获取文件大小
+        return statBuf.st_size;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+char *GBKCharToUTF8Char(const char *gbk_str)
+{
+    // 转换编码
+    int gbk_len = (int) strlen(gbk_str) + 1;
+    // 将 GBK 编码的字符串转换成 UTF-16 编码的宽字符集
+    int utf16_len = MultiByteToWideChar(CP_ACP, 0, gbk_str, gbk_len, nullptr, 0);
+    auto *utf16_str = new wchar_t[utf16_len];
+    MultiByteToWideChar(CP_ACP, 0, gbk_str, gbk_len, utf16_str, utf16_len);
+
+    // 将 UTF-16 编码的宽字符串转换成 UTF-8 编码的多字节字符集
+    int utf8_len = WideCharToMultiByte(CP_UTF8, 0, utf16_str, utf16_len, nullptr, 0, nullptr, nullptr);
+    char *utf8_str = new char[utf8_len];
+    WideCharToMultiByte(CP_UTF8, 0, utf16_str, utf16_len, utf8_str, utf8_len, nullptr, nullptr);
+    delete[]utf16_str;
+    return utf8_str;
+}
+
+string GBKStringToUTF8String(const string &gbk_str)
+{
+    char *res = GBKCharToUTF8Char(gbk_str.c_str());
+    string ret = res;
+    delete[]res;
+    return ret;
 }

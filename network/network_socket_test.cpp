@@ -1,4 +1,5 @@
 #include <iostream>
+#include <io.h>
 #include "network_socket.cpp"
 #include "./../tools.cpp"
 
@@ -24,17 +25,23 @@ int main2()
     return 0;
 }
 
+#include <ctime>
+
+void Delay(int time)//time*1000为秒数
+{
+    clock_t now = clock();
+
+    while (clock() - now < time * 1000)
+    {}
+}
+
 /** 传输文件 */
 int main3()
 {
-//    string fp = "E:/Programs/copier/copier_cpp/network/network_socket_test.cpp";
-//    string fp = "E:/test.xmind";
-//    string fp = "E:/icon_.jpg";
-    string fp = "E:/魔术方法大总结";
+    wstring fp = L"E:/魔术方法大总结.xmind";
+//    wstring fp = L"E:/纯中文";
+//    wstring fp = L"D:/2020.10课程表.jpg";
     int need;
-//    printf("等待你输入文件名：");
-//    getline(cin, fp);
-    // char buffer[1024];
     Socket_copier_part s("127.0.0.1", "super_pw");
     printf("version: %d\n", s.send_version());
     printf("what: %d\n", s.send_what(1));
@@ -44,8 +51,9 @@ int main3()
     printf("content_size: %d\n", s.send_content_size(fp));
     printf("name: %d\n", s.send_name(fp));
     printf("-> need_content? %d\n", need = s.recv_need_2_send_content());
-    if (!need)
+    if (need)
     {
+        Delay(5);
         printf("content: %d\n", s.send_content(fp));
     }
     return 0;
@@ -53,7 +61,7 @@ int main3()
 
 int main()
 {
-//    system("chcp 65001");
+    system("chcp 65001");
     main3();
     printf("S!\n");
     return 0;
