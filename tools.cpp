@@ -8,9 +8,7 @@
 
 using namespace std;
 
-regex
-        re_comma(R"(((\s*,\s*)|(\s*，\s*)|(\s*.\s*)|(\s*。\s*)|(\s*、\s*)))"),
-        re_fpath_abs(R"((([A-Za-z]):(?:.+)?[/\\])([^/\\:\*\?\"<>\|]+))");
+const regex re_fpath_abs(R"((([A-Za-z]):(?:.+)?[/\\])([^/\\:\*\?\"<>\|]+))");
 
 /* 输出
  *
@@ -115,11 +113,10 @@ string getExeFileAbsPath()
 /* 判断文件是否在U盘 */
 bool isInUDisk(const string &fp, const string &id)  // id: ignore disk
 {
-    string disk = getFilePathSplitByAbs(fp, 2).value(); // 当前文件的盘符
-    const sregex_token_iterator end;
-    for (sregex_token_iterator iter(id.begin(), id.end(), re_comma, -1); iter != end; iter++)
+    char disk = fp[0]; // 当前文件的盘符
+    for (char i: id)
     {
-        if (iter->str() == disk)
+        if (disk == i)
         {
             return false;
         }
@@ -174,33 +171,37 @@ rff<string> run_cmd(const string &cmd)
  */
 int getMD5FromFile(const string &fp, char buf[16])
 {
-    string cmd = "certutil -hashfile \"" + fp + "\" MD5";
+    string cmd = "certutil -hashfile \"" + fp + "\" MD5", s;
+    print_sep('-', true, 5);
+    printf("%s\n", GBKStringToUTF8String(cmd).c_str());
+    print_sep('-', true, 5);
     rff<string> r = run_cmd(cmd);
     if (r.status() != 0)
     {
         return -1;
     }
+
     char temp1, temp2;
     int indexOfSpace;
-    string s = r.value();
+    s = GBKStringToUTF8String(r.value());
     cmatch m;
-    // 去空格
     while ((indexOfSpace = (int) s.find(' ')) != -1)
     {
         s.erase(indexOfSpace, 1);
     }
+    printf("%s", s.c_str());
+    print_sep('-', true, 5);    // 去空格
+
     // 找 hash
-    const regex RE_MD5("[0-9A-F]{32}", regex_constants::icase);
-    const sregex_token_iterator end;
-    for (sregex_token_iterator iter(s.begin(), s.end(), RE_MD5); iter != end; iter++)
-    {
-        s = iter->str();
-    }
-    printf("%s\n", s.c_str());
-    if (s.length() != 32)
+    const regex RE_MD5("\n([0-9A-Fa-f]{32})\n");
+    if (!regex_search(s.c_str(), m, RE_MD5))
     {
         return -2;
     }
+    s = m.str(1);
+    printf("%s\n", s.c_str());
+    print_sep('-', true, 5);
+
     // 填入数组
     for (int i = 0; i < 16; i++)
     {
@@ -252,6 +253,51 @@ string GBKStringToUTF8String(const string &gbk_str)
 {
     char *res = GBKCharToUTF8Char(gbk_str.c_str());
     string ret = res;
+    delete[]res;
+    return ret;
+}
+
+char *UTF8CharToGBKChar(const char *utf8_str)
+{
+    // 转换编码
+    int utf8_len = (int) strlen(utf8_str) + 1;
+    // 将 GBK 编码的字符串转换成 UTF-16 编码的宽字符集
+    int utf16_len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, utf8_len, nullptr, 0);
+    auto *utf16_str = new wchar_t[utf16_len];
+    MultiByteToWideChar(CP_UTF8, 0, utf8_str, utf8_len, utf16_str, utf16_len);
+
+    // 将 UTF-16 编码的宽字符串转换成 UTF-8 编码的多字节字符集
+    int gbk_len = WideCharToMultiByte(CP_ACP, 0, utf16_str, utf16_len, nullptr, 0, nullptr, nullptr);
+    char *gbk_str = new char[utf8_len];
+    WideCharToMultiByte(CP_ACP, 0, utf16_str, utf16_len, gbk_str, gbk_len, nullptr, nullptr);
+    delete[]utf16_str;
+    return gbk_str;
+}
+
+string UTF8StringToGBKString(const string &gbk_str)
+{
+    char *res = UTF8CharToGBKChar(gbk_str.c_str());
+    string ret = res;
+    delete[]res;
+    return ret;
+}
+
+wchar_t *UTF8CharToUTF16WChar(const char *utf8_str)
+{
+    // 转换编码
+    int gbk_len = (int) strlen(utf8_str) + 1;
+    // 将 GBK 编码的字符串转换成 UTF-16 编码的宽字符集
+    int utf16_len = MultiByteToWideChar(CP_UTF8, 0, utf8_str, gbk_len, nullptr, 0);
+    auto *utf16_str = new wchar_t[utf16_len];
+    MultiByteToWideChar(CP_UTF8, 0, utf8_str, gbk_len, utf16_str, utf16_len);
+
+    return utf16_str;
+}
+
+wstring UTF8StringToUTF16WString(const string &utf8_str)
+{
+    wchar_t *res = UTF8CharToUTF16WChar(utf8_str.c_str());
+    wstring ret = res;
     delete[]res;
     return ret;
 }

@@ -54,4 +54,12 @@ char *GBKCharToUTF8Char(const char *);
 
 std::string GBKStringToUTF8String(const std::string &);
 
+char *UTF8CharToGBKChar(const char *);
+
+std::string UTF8StringToGBKString(const std::string &);
+
+wchar_t *UTF8CharToUTF16WChar(const char *);
+
+std::wstring UTF8StringToUTF16WString(const std::string &);
+
 #endif

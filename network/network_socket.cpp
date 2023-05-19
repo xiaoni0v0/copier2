@@ -175,8 +175,10 @@ int Socket_copier_part::send_sk() const
 int Socket_copier_part::send_hash(const string &fp) const
 {
     char buffer[16];
-    if (getMD5FromFile(fp, buffer) == -1)
+    if (getMD5FromFile(fp, buffer) != 0)
     {
+        memset(buffer, -1, 16);
+        base.s_send(buffer, 16);
         return -2;
     }
     else
