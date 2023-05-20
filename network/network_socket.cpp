@@ -7,9 +7,9 @@ using namespace std;
 
 /** 版本
  *  @分配
- *      1、2位代表大版本，3、4、5、6位代表小版本，7、8代表通信版本
+ *      1、2位代表大版本，3、4、5位代表小版本，6、7、8代表通信版本
  */
-const char VER = (char) 0b10000101;  // 2.1.1
+const char VER = (char) 0211;  // 2.1.1
 
 /** 创建套接字
  *  @返回值
@@ -130,7 +130,8 @@ Socket_copier_part::Socket_copier_part(const string &_addr, const string &_sk)  
     // addr
     addr = _addr;
     // 密钥
-    sk = (_sk + string(8, '0')).substr(0, 8);  // 防止不够 8 位导致访问非法内存
+    // sk = (_sk + string(8, '0')).substr(0, 8);
+    sk = _sk, sk.resize(8, '0');  // 防止不够 8 位导致访问非法内存
     // 创建
     base.create();
     if ((sta = base.s_connect(_addr, PORT)))

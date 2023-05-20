@@ -18,6 +18,8 @@ int checkConf();
 
 void log(const char *, ...);
 
+void log_gbk(const char *, const string &);
+
 HANDLE executePPTFile();
 
 void checkEnvironment_with1arg();
@@ -34,9 +36,18 @@ bool C_SendPPT;
 string C_PowerPointPath, C_CopyPath, C_IgnoreDisk, C_ServerAddr, C_SecretKey;
 
 int argc;
-string f_path;
+string
+        f_path,
+        P_exe_path = getExeFileAbsPath(),
+        P_exe_dir = getFilePathSplitByAbs(P_exe_path, 1).value(),
+        P_ini_path = P_exe_dir + "copier.ini",
+        P_log_path = P_exe_dir + "copier.log";
 
-wchar_t copyRight[] = L"copier v2.1--by XN & XY";
+const wchar_t copyRight[] = L"copier v2.1--by XN & XY";
+
+const regex
+        re_fpathDir_abs(R"((([A-Za-z]):(?:.+)?[/\\]))"),
+        re_IPv4(R"(((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3})");
 
 /* 加载配置 */
 int conf()
@@ -44,7 +55,7 @@ int conf()
     int ret_read;
     IniParser ip;
     // read
-    ret_read = ip.read(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.ini");
+    ret_read = ip.read(P_ini_path);
     rff<int>
             R_CopyFlush = ip.get_v_int("copier", "CopyFlush", 1024),
             R_MaxSendSize = ip.get_v_int("net_work", "MaxSendSize", -1);
@@ -67,8 +78,8 @@ int conf()
     C_SecretKey = R_SecretKey.value();
     C_MaxSendSize = R_MaxSendSize.value();
     // return
-    return ret_read | R_PowerPointPath.status() | R_CopyPath.status() | R_IgnoreDisk.status() |
-           R_CopyFlush.status() | R_ServerAddr.status() | R_SendPPT.status() | R_SecretKey.status();
+    return ret_read | R_PowerPointPath.status() | R_CopyPath.status() | R_IgnoreDisk.status() | R_CopyFlush.status()
+           | R_ServerAddr.status() | R_SendPPT.status() | R_SecretKey.status() | R_MaxSendSize.status();
 }
 
 int checkConf()
@@ -81,22 +92,30 @@ int checkConf()
         return -1;
     }
 
+    // CopyPath
+    if (!regex_match(C_CopyPath, re_fpathDir_abs))
+    {
+        log("CopyPath 路径不合法，请检查配置文件\n");
+        MessageBoxW(nullptr, L"CopyPath 路径不合法，请检查配置文件", copyRight, MB_SYSTEMMODAL | MB_ICONERROR);
+        return -2;
+    }
+
     // CopyFlush
     if (C_CopyFlush <= 0 || C_CopyFlush > 4000000)
     {
         log("配置 CopyFlush 需在 [1, 4000000] 区间内，请检查配置文件\n");
         MessageBoxW(nullptr, L"配置 CopyFlush 需在 [1, 4000000] 区间内，请检查配置文件", copyRight,
                     MB_SYSTEMMODAL | MB_ICONERROR);
-        return -2;
+        return -3;
     }
 
     // ServerAddr
-    if (!regex_match(C_ServerAddr, regex(R"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")))
+    if (!regex_match(C_ServerAddr, re_IPv4))
     {
         log("配置 ServerAddr 必须是一个 IPv4 的地址，请检查配置文件\n");
         MessageBoxW(nullptr, L"配置 ServerAddr 必须是一个 IPv4 的地址，请检查配置文件", copyRight,
                     MB_SYSTEMMODAL | MB_ICONERROR);
-        return -3;
+        return -4;
     }
 
     return 0;
@@ -104,7 +123,7 @@ int checkConf()
 
 void log(const char *format, ...)
 {
-    tm *p = get_tm();
+    const tm *p = get_tm();
     // 输出时间
     printf("[%04d/%02d/%02d %02d:%02d:%02d] ",
            p->tm_year + 1900, p->tm_mon + 1, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec);
@@ -115,11 +134,16 @@ void log(const char *format, ...)
     va_end(args);           // 清除可变参数列表对象args
 }
 
+void log_gbk(const char *format, const string &str)
+{
+    log(format, GBKStringToUTF8String(str).c_str());
+}
+
 /* 用PNT打开指定文件 */
 HANDLE executePPTFile()
 {
     return ShellExecuteA(nullptr, "open",
-                         ("\"" + C_PowerPointPath + "\"").c_str(),
+                         ("\"" + UTF8StringToGBKString(C_PowerPointPath) + "\"").c_str(),
                          ("\"" + f_path + "\"").c_str(),
                          nullptr, SW_SHOWNORMAL);
 }
@@ -145,10 +169,12 @@ void executeAndCopyFile_with2args()
 {
     // 有 2 个参数，打开（，再拷贝）
     string f_name = getFilePathSplitByAbs(f_path, 3).value();
+    string f_name_utf8 = GBKStringToUTF8String(f_name);
+
     log("参数为 2 个，执行文件操作\n");
     log("打开文件路径: %s\n", GBKStringToUTF8String(f_path).c_str());
     log("文件所在盘: %c\n", toupper(f_path[0]));
-    log("文件名: %s\n", GBKStringToUTF8String(f_name).c_str());
+    log("文件名: %s\n", f_name_utf8.c_str());
     executePPTFile(); // 打开文件
     // 判断是否在 U 盘
     if (isInUDisk(f_path, C_IgnoreDisk)) // 在U盘中，复制
@@ -157,10 +183,10 @@ void executeAndCopyFile_with2args()
         log("创建文件夹状态: %d\n", // 创建文件夹，0 为原来不存在但创建成功，-1 为原来存在文件夹而不用创建
             _wmkdir(UTF8StringToUTF16WString(C_CopyPath).c_str())); // C_CopyPath 本来是 UTF-8
         log("文件拷贝目标: %s%s\n", C_CopyPath.c_str(),
-            GBKStringToUTF8String(getFilePathSplitByAbs(f_path, 3).value()).c_str());
+            f_name_utf8.c_str());
         log("文件拷贝状态: %d\n", // 复制文件
             copyFile(f_path,
-                     UTF8StringToGBKString(C_CopyPath) + getFilePathSplitByAbs(f_path, 3).value(),
+                     UTF8StringToGBKString(C_CopyPath) + f_name,
                      C_CopyFlush)); // 0 为正常，1 为找不到源文件，-1 为创建文件失败
     }
     else // 不在U盘中，不复制
@@ -191,12 +217,15 @@ void testNetStatus_with1arg()
     switch (netStatus)
     {
         case 0:
+            log("连接网络成功！密码正确！\n");
             MessageBoxW(nullptr, L"连接网络成功！密码正确！", copyRight, MB_SYSTEMMODAL | MB_ICONINFORMATION);
             break;
         case 1:
+            log("密码错误！\n");
             MessageBoxW(nullptr, L"密码错误！", copyRight, MB_SYSTEMMODAL | MB_ICONERROR);
             break;
         case -1:
+            log("网络连接失败！\n");
             MessageBoxW(nullptr, L"网络连接失败！", copyRight, MB_SYSTEMMODAL | MB_ICONERROR);
             break;
         default:
@@ -245,44 +274,53 @@ int main(int _argc, char *_argv[])
 {
 #ifndef DEBUG_MODE
     // 重定向文件
-    freopen((getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.log").c_str(), "a", stdout);
-    freopen((getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.log").c_str(), "a", stderr);
+    freopen((P_log_path).c_str(), "a", stdout);
+    freopen((P_log_path).c_str(), "a", stderr);
 #endif
 #ifdef DEBUG_MODE
     system("chcp 65001");
 #endif
-    tm *p;
+    tm *_p;
     // 只能同时运行一次
     HANDLE hMutex = CreateMutexA(nullptr, true, "CopierSingleInstanceMutex");
     if (GetLastError() == ERROR_ALREADY_EXISTS)
     {
         CopierRunStatus = -1;
         log("copier 已打开，取消操作\n");
-        MessageBoxW(nullptr, L"文件已打开，请耐心等待！", copyRight, MB_SYSTEMMODAL | MB_ICONINFORMATION);
+        MessageBoxW(nullptr, (_argc == 2 ? L"文件已打开，请耐心等待！" : L"程序正在执行，请关闭后重试！"),
+                    copyRight, MB_SYSTEMMODAL | MB_ICONWARNING);
         goto copier_exit;
     }
 
     argc = _argc;
+
+    _p = get_tm();
+    printf("\n%scopier v2.1 于 %04d/%02d/%02d %02d:%02d:%02d 启动%s\n",
+           string(60, '-').c_str(),
+           _p->tm_year + 1900, _p->tm_mon + 1, _p->tm_mday, _p->tm_hour, _p->tm_min, _p->tm_sec,
+           string(60, '-').c_str());
+
     // 配置文件读取
-    if (getFileSize(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.ini") < 0)
+    if (getFileSize(P_ini_path) < 0)
     {
         CopierRunStatus = -2;
         log("未找到 copier.ini，程序无法运行\n");
         MessageBoxW(nullptr, L"未找到 copier.ini，程序无法运行", copyRight, MB_SYSTEMMODAL | MB_ICONERROR);
         goto copier_exit;
     }
-    ConfigStatus = conf();
-    p = get_tm();
-    printf("\n%scopier v2.1 于 %04d/%02d/%02d %02d:%02d:%02d 启动%s\n",
-           string(50, '-').c_str(),
-           p->tm_year + 1900, p->tm_mon + 1, p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec,
-           string(50, '-').c_str());
-    log("EXE 路径: %s\n", GBKStringToUTF8String(getExeFileAbsPath()).c_str());
-    log("工作目录: %s\n", GBKStringToUTF8String(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value()).c_str());
-    log("日志文件路径: %s\n",
-        GBKStringToUTF8String(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.log").c_str());
-    log("配置文件路径: %s\n",
-        GBKStringToUTF8String(getFilePathSplitByAbs(getExeFileAbsPath(), 1).value() + "copier.ini").c_str());
+    // 初步检查配置文件是否合法
+    if ((ConfigStatus = conf()))
+    {
+        CopierRunStatus = -3;
+        log("配置不合法，请检查配置文件！\n");
+        MessageBoxW(nullptr, L"配置不合法，请检查配置文件！", copyRight, MB_SYSTEMMODAL | MB_ICONERROR);
+        goto copier_exit;
+    }
+
+    log_gbk("EXE 路径: %s\n", P_exe_path);
+    log_gbk("工作目录: %s\n", P_exe_dir);
+    log_gbk("日志文件路径: %s\n", P_log_path);
+    log_gbk("配置文件路径: %s\n", P_ini_path);
     log("配置状态: %d\n", ConfigStatus); // 0 为正常，-1 为读取配置文件异常
     log(R"(配置信息如下:
     [copier]
@@ -311,13 +349,12 @@ int main(int _argc, char *_argv[])
     {
         f_path = _argv[1];
         executeAndCopyFile_with2args();
-        CopierRunStatus = 0;
     }
     else
     {
         checkEnvironment_with1arg();
-        CopierRunStatus = 0;
     }
+    CopierRunStatus = 0;
 
     // 退出程序
     copier_exit:

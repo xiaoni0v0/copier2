@@ -40,7 +40,7 @@ int IniParser::read(const string &f_path)
     FILE *_in;
     if (!(_in = fopen(f_path.c_str(), "r")))
     {
-        outputError("[ini_parser][ERROR] 文件 \"%s\" 打开失败！\n", f_path.c_str());
+        outputError("[ini_parser][ERROR] 文件 \"%s\" 打开失败！\n", GBKStringToUTF8String(f_path).c_str());
         return -1;
     }
     // 开始读
@@ -76,8 +76,9 @@ int IniParser::read(const string &f_path)
 
 [ini_parser][ERROR] 为防止进一步出错，整个配置文件 "%s" 将作废
 )",
-                        f_path.c_str(), line_num, line_num, line, string(strlen(line) - 1, '~').c_str(),
-                        f_path.c_str());
+                        GBKStringToUTF8String(f_path).c_str(), line_num, line_num, line,
+                        string(strlen(line) - 1, '~').c_str(),
+                        GBKStringToUTF8String(f_path).c_str());
             return -1;
         }
     }

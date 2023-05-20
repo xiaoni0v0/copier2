@@ -8,7 +8,9 @@
 
 using namespace std;
 
-const regex re_fpath_abs(R"((([A-Za-z]):(?:.+)?[/\\])([^/\\:\*\?\"<>\|]+))");
+const regex
+        re_fpath_abs(R"((([A-Za-z]):(?:.+)?[/\\])([^/\\:\*\?\"<>\|]+))"),
+        re_MD5("\n([0-9A-Fa-f]{32})\n");
 
 /* 输出
  *
@@ -113,7 +115,7 @@ string getExeFileAbsPath()
 /* 判断文件是否在U盘 */
 bool isInUDisk(const string &fp, const string &id)  // id: ignore disk
 {
-    char disk = fp[0]; // 当前文件的盘符
+    const char disk = fp[0]; // 当前文件的盘符
     for (char i: id)
     {
         if (disk == i)
@@ -193,8 +195,7 @@ int getMD5FromFile(const string &fp, char buf[16])
     print_sep('-', true, 5);    // 去空格
 
     // 找 hash
-    const regex RE_MD5("\n([0-9A-Fa-f]{32})\n");
-    if (!regex_search(s.c_str(), m, RE_MD5))
+    if (!regex_search(s.c_str(), m, re_MD5))
     {
         return -2;
     }
